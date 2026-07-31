@@ -1,0 +1,7 @@
+export default function Orders() {
+  return (
+    <div className="flex items-center justify-center h-[80vh]">
+      <h1 className="text-5xl font-bold">Orders Page</h1>
+    </div>
+  );
+}
