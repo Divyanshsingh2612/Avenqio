@@ -17,7 +17,7 @@ export default function Hero() {
 
           <span className="inline-block bg-blue-600 px-5 py-2 rounded-full text-sm font-medium">
 
-            🚀 AI Powered Shopping
+            Smart Shopping, Simplified
 
           </span>
 
@@ -37,10 +37,8 @@ export default function Hero() {
 
           <p className="mt-8 text-xl text-gray-300 leading-9 max-w-xl">
 
-            Discover thousands of products with intelligent
-            recommendations, semantic search,
-            personalized shopping,
-            and exclusive deals.
+            Discover products with intelligent recommendations
+            smart search, and a simpler way to shop.
 
           </p>
 

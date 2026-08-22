@@ -18,7 +18,7 @@ export default function Navbar() {
             to="/"
             className="text-4xl font-black text-blue-600"
           >
-            ShopSmart AI
+            AVENQIO
           </Link>
 
           {/* Search */}
