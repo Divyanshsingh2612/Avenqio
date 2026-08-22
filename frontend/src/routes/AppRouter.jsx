@@ -12,7 +12,6 @@ import Orders from "../pages/Orders/Orders";
 import Profile from "../pages/Profile/Profile";
 import Admin from "../pages/Admin/Admin";
 import NotFound from "../pages/NotFound/NotFound";
-
 import Layout from "../components/layout/Layout";
 
 export default function AppRouter() {

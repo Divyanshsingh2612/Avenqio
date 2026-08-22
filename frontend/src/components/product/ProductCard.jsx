@@ -1,15 +1,18 @@
 import { FiHeart, FiShoppingCart, FiStar } from "react-icons/fi";
+import { Link } from "react-router-dom";
 
 export default function ProductCard({ product }) {
   return (
     <div className="group bg-white rounded-3xl overflow-hidden shadow-md hover:shadow-2xl transition-all duration-300 hover:-translate-y-2">
       {/* Product Image */}
       <div className="relative overflow-hidden">
-        <img
-          src={product.image}
-          alt={product.name}
-          className="w-full h-64 object-cover transition-transform duration-500 group-hover:scale-110"
-        />
+        <Link to={`/products/${product.id}`}>
+       <img
+       src={product.image}
+       alt={product.name}
+       className="w-full h-64 object-contain p-4"
+       />
+       </Link>
 
         {/* Category Badge */}
         <span className="absolute top-4 left-4 bg-blue-600 text-white text-xs font-semibold px-3 py-1 rounded-full">
@@ -25,9 +28,11 @@ export default function ProductCard({ product }) {
       {/* Product Details */}
       <div className="p-6">
         {/* Product Name */}
-        <h3 className="text-xl font-bold text-slate-800 line-clamp-2">
-          {product.name}
+        <Link to={`/products/${product.id}`}>
+        <h3 className="text-xl font-bold text-slate-900 hover:text-blue-600 transition">
+        {product.name}
         </h3>
+        </Link>
 
         {/* Rating */}
         <div className="flex items-center gap-2 mt-3">
