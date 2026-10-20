@@ -4,8 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { FiSearch, FiSliders, FiX } from "react-icons/fi";
 
 import ProductCard from "../../components/product/ProductCard";
-import api from "../../services/api";
-
+import api from "../../services/api.js";
 export default function Products() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
