@@ -7,8 +7,12 @@ import {
   FiShield,
   FiCheckCircle,
   FiPackage,
+  FiClock,
+  FiShoppingBag,
 } from "react-icons/fi";
+
 import { clearCart } from "../../features/cart/cartSlice";
+import { addOrder } from "../../features/orders/ordersSlice";
 
 const initialForm = {
   fullName: "",
@@ -24,6 +28,7 @@ const initialForm = {
 export default function Checkout() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+
   const items = useSelector((state) => state.cart?.items ?? []);
 
   const [form, setForm] = useState(initialForm);
@@ -64,7 +69,7 @@ export default function Checkout() {
       newErrors.fullName = "Enter your full name.";
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
       newErrors.email = "Enter a valid email address.";
     }
 
@@ -95,62 +100,119 @@ export default function Checkout() {
   const handleSubmit = (event) => {
     event.preventDefault();
 
-    if (items.length === 0) {
+    if (items.length === 0 || !validateForm()) {
       return;
     }
 
-    if (!validateForm()) {
-      return;
+    const generatedOrderNumber =
+      `AV-${Date.now().toString().slice(-8)}`;
+
+    // Save a snapshot of the order before clearing the cart.
+    const order = {
+      id: generatedOrderNumber,
+      createdAt: new Date().toISOString(),
+      customer: { ...form },
+      items: items.map((item) => ({ ...item })),
+      subtotal,
+      shipping,
+      total,
+      status: "Demo Order",
+    };
+
+    try {
+      // Save the order in Redux and localStorage.
+      dispatch(addOrder(order));
+
+      // Verify localStorage accepted the saved order.
+      const savedOrders = JSON.parse(
+        localStorage.getItem("avenqio-orders") || "[]"
+      );
+
+      const wasSaved = savedOrders.some(
+        (savedOrder) => savedOrder.id === generatedOrderNumber
+      );
+
+      if (!wasSaved) {
+        throw new Error("The order could not be saved.");
+      }
+
+      setOrderNumber(generatedOrderNumber);
+      dispatch(clearCart());
+      setOrderPlaced(true);
+
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (error) {
+      console.error("Unable to save demo order:", error);
+      alert(
+        "Your demo order could not be saved. Please try again."
+      );
     }
-
-    // Demo only: this does not create a backend order or take payment.
-    const generatedOrderNumber = `AV-${Date.now().toString().slice(-8)}`;
-
-    setOrderNumber(generatedOrderNumber);
-    dispatch(clearCart());
-    setOrderPlaced(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  // Successful demo order confirmation
   if (orderPlaced) {
     return (
       <main className="min-h-screen bg-slate-50 px-4 py-16">
         <section className="mx-auto max-w-xl rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm sm:p-12">
-          <FiCheckCircle className="mx-auto text-green-500" size={64} />
+          <FiCheckCircle
+            className="mx-auto text-green-500"
+            size={64}
+          />
 
           <h1 className="mt-6 text-3xl font-extrabold text-slate-900">
             Demo order successful!
           </h1>
 
           <p className="mt-3 text-slate-600">
-            Your checkout form was submitted successfully. No payment was
-            collected and no real order was sent to a server.
+            Your order has been saved in this browser. No payment
+            was collected and no real order was sent to a server.
           </p>
 
           <div className="mt-6 rounded-xl bg-slate-50 p-4">
-            <p className="text-sm text-slate-500">Demo order reference</p>
+            <p className="text-sm text-slate-500">
+              Demo order reference
+            </p>
             <p className="mt-1 text-xl font-bold text-blue-600">
               {orderNumber}
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => navigate("/products")}
-            className="mt-8 w-full rounded-xl bg-blue-600 px-6 py-3 font-bold text-white transition hover:bg-blue-700"
-          >
-            Continue Shopping
-          </button>
+          <div className="mt-6 flex items-center justify-center gap-2 text-sm text-green-700">
+            <FiShield />
+            Order saved locally
+          </div>
+
+          <div className="mt-8 grid gap-3">
+            <Link
+              to="/orders"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3 font-bold text-white transition hover:bg-blue-700"
+            >
+              <FiPackage />
+              View Order History
+            </Link>
+
+            <button
+              type="button"
+              onClick={() => navigate("/products")}
+              className="w-full rounded-xl border border-slate-200 px-6 py-3 font-bold text-slate-700 transition hover:bg-slate-50"
+            >
+              Continue Shopping
+            </button>
+          </div>
         </section>
       </main>
     );
   }
 
+  // Empty cart state
   if (items.length === 0) {
     return (
       <main className="min-h-screen bg-slate-50 px-4 py-20">
         <section className="mx-auto max-w-xl rounded-3xl bg-white p-8 text-center shadow-sm">
-          <FiPackage className="mx-auto text-blue-600" size={52} />
+          <FiPackage
+            className="mx-auto text-blue-600"
+            size={52}
+          />
 
           <h1 className="mt-5 text-3xl font-bold text-slate-900">
             Your cart is empty
@@ -322,14 +384,14 @@ export default function Checkout() {
               <div className="mt-6 flex items-start gap-3 rounded-xl bg-blue-50 p-4 text-sm text-blue-800">
                 <FiShield className="mt-0.5 shrink-0" size={19} />
                 <p>
-                  This demo collects shipping details only in the current
-                  page session. It does not send them to a server.
+                  This demo stores order details in your browser only.
+                  No details are sent to a server and no payment is collected.
                 </p>
               </div>
             </section>
 
             {/* Order summary */}
-            <aside className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6 lg:sticky lg:top-6">
+            <aside className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6 lg:sticky lg:top-24">
               <h2 className="text-xl font-bold text-slate-900">
                 Order Summary
               </h2>
@@ -352,6 +414,7 @@ export default function Checkout() {
                       <p className="line-clamp-2 text-sm font-semibold text-slate-800">
                         {item.name}
                       </p>
+
                       <p className="mt-1 text-xs text-slate-500">
                         Qty: {item.quantity}
                       </p>
@@ -359,7 +422,8 @@ export default function Checkout() {
 
                     <p className="shrink-0 text-sm font-bold text-slate-900">
                       {formatPrice(
-                        Number(item.price || 0) * item.quantity
+                        Number(item.price || 0) *
+                          (Number(item.quantity) || 0)
                       )}
                     </p>
                   </div>
@@ -393,8 +457,8 @@ export default function Checkout() {
 
               {subtotal > 0 && subtotal < 999 && (
                 <p className="mt-4 rounded-lg bg-blue-50 p-3 text-xs text-blue-700">
-                  Add {formatPrice(999 - subtotal)} more to qualify for free
-                  shipping.
+                  Add {formatPrice(999 - subtotal)} more to qualify
+                  for free shipping.
                 </p>
               )}
 
@@ -405,7 +469,8 @@ export default function Checkout() {
                 Place Demo Order
               </button>
 
-              <p className="mt-3 text-center text-xs text-slate-500">
+              <p className="mt-3 flex items-center justify-center gap-1 text-center text-xs text-slate-500">
+                <FiClock />
                 Demo only — no payment will be collected.
               </p>
             </aside>

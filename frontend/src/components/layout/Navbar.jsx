@@ -9,17 +9,25 @@ import {
 } from "react-icons/fi";
 
 export default function Navbar() {
-  // Get cart items from the existing Redux store
-  const cartItems = useSelector((state) => state.cart?.items ?? []);
+  // Get cart items from Redux
+  const cartItems = useSelector(
+    (state) => state.cart?.items ?? []
+  );
 
-  // Count total units in the cart
+  // Get wishlist items from Redux
+  const wishlistItems = useSelector(
+    (state) => state.wishlist?.items ?? []
+  );
+
+  // Count total units in cart
   const cartCount = cartItems.reduce(
-    (total, item) => total + (Number(item.quantity) || 0),
+    (total, item) =>
+      total + (Number(item.quantity) || 0),
     0
   );
 
-  // Wishlist count placeholder until wishlist state is connected
-  const wishlistCount = 0;
+  // Count unique products in wishlist
+  const wishlistCount = wishlistItems.length;
 
   const navLinkClass = ({ isActive }) =>
     isActive
@@ -30,6 +38,7 @@ export default function Navbar() {
     <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-xl shadow-lg">
       <div className="max-w-[1400px] mx-auto px-8">
         <div className="flex items-center justify-between h-20">
+
           {/* Logo */}
           <Link
             to="/"
@@ -41,76 +50,102 @@ export default function Navbar() {
           {/* Search */}
           <div className="hidden md:flex items-center w-[420px] bg-slate-100 rounded-full px-5 py-3">
             <FiSearch className="text-gray-500 text-xl" />
+
             <input
               type="text"
               placeholder="Search products..."
+              aria-label="Search products"
               className="bg-transparent outline-none ml-3 w-full text-lg placeholder:text-gray-500"
             />
           </div>
 
           {/* Navigation */}
           <div className="hidden lg:flex items-center gap-10">
-            <NavLink to="/" end className={navLinkClass}>
+            <NavLink
+              to="/"
+              end
+              className={navLinkClass}
+            >
               Home
             </NavLink>
 
-            <NavLink to="/products" className={navLinkClass}>
+            <NavLink
+              to="/products"
+              className={navLinkClass}
+            >
               Products
             </NavLink>
 
-            <NavLink to="/wishlist" className={navLinkClass}>
+            <NavLink
+              to="/wishlist"
+              className={navLinkClass}
+            >
               Wishlist
             </NavLink>
 
-            <NavLink to="/cart" className={navLinkClass}>
+            <NavLink
+              to="/cart"
+              className={navLinkClass}
+            >
               Cart
             </NavLink>
           </div>
 
           {/* Right-side icons */}
           <div className="flex items-center gap-6">
-            {/* Wishlist */}
+
+            {/* Wishlist with live count */}
             <Link
               to="/wishlist"
               aria-label={`Wishlist, ${wishlistCount} items`}
               className="relative inline-flex hover:scale-110 transition"
             >
-              <FiHeart size={26} />
+              <FiHeart
+                size={26}
+                className={
+                  wishlistCount > 0
+                    ? "text-red-500"
+                    : "text-gray-700"
+                }
+              />
 
-              <span className="absolute -top-2 -right-2 min-w-5 h-5 px-1 rounded-full bg-red-500 text-white text-xs flex items-center justify-center">
-                {wishlistCount}
+              <span className="absolute -top-2 -right-2 min-w-5 h-5 px-1 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">
+                {wishlistCount > 99
+                  ? "99+"
+                  : wishlistCount}
               </span>
             </Link>
 
-            {/* Cart with live Redux count */}
+            {/* Cart with live count */}
             <Link
               to="/cart"
               aria-label={`Shopping cart, ${cartCount} items`}
               className="relative inline-flex items-center justify-center hover:scale-110 transition"
             >
-              <FiShoppingCart size={26} />
+              <FiShoppingCart
+                size={26}
+                className="text-gray-700"
+              />
 
-              <span
-                className="absolute -top-2 -right-2 z-10 min-w-5 h-5 px-1 rounded-full text-white text-xs font-bold flex items-center justify-center"
-                style={{
-                  backgroundColor: "#2563eb",
-                  visibility: "visible",
-                  opacity: 1,
-                }}
-              >
-                {cartCount > 99 ? "99+" : cartCount}
+              <span className="absolute -top-2 -right-2 z-10 min-w-5 h-5 px-1 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">
+                {cartCount > 99
+                  ? "99+"
+                  : cartCount}
               </span>
             </Link>
 
             {/* Login */}
             <button
               type="button"
-              onClick={() => alert("Login will be available soon!")}
+              onClick={() =>
+                alert("Login will be available soon!")
+              }
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-full transition"
             >
               <FiUser />
               Login
             </button>
+
           </div>
         </div>
       </div>
