@@ -31,7 +31,7 @@ products = [
         "category": "Electronics",
         "price": 1999,
         "rating": 4.5,
-        "image": "https://placehold.co/400x400?text=Headphones",
+        "image": "https://m.media-amazon.com/images/I/41lArSiD5hL._AC_UF1000,1000_QL80_.jpg",
         "stock": 10,
     },
     {
@@ -40,7 +40,7 @@ products = [
         "category": "Electronics",
         "price": 2499,
         "rating": 4.3,
-        "image": "https://placehold.co/400x400?text=Smart+Watch",
+        "image": "https://mc.bajajfinserv.in/media/catalog/product/s/m/sml315fzgains_455069_base.jpeg",
         "stock": 8,
     },
     {
@@ -49,7 +49,7 @@ products = [
         "category": "Fashion",
         "price": 1799,
         "rating": 4.2,
-        "image": "https://placehold.co/400x400?text=Shoes",
+        "image": "https://adn-static1.nykaa.com/nykdesignstudio-images/pub/media/catalog/product/a/d/ad22b92Nike-HQ2592-702_4.jpg?rnd=20200526195200&tr=w-1536",
         "stock": 15,
     },
 ]
