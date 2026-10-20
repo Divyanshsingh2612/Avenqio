@@ -8,21 +8,22 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Allow requests from the local frontend and deployed Vercel website.
+# CORS configuration for local development and production.
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://avenqio.vercel.app",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "https://avenqio.vercel.app",
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Temporary product data.
-# Later, this can be moved into a database.
 products = [
     {
         "id": 1,
