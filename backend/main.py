@@ -1,23 +1,28 @@
+
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import FastAPI
 
 app = FastAPI(
     title="AVENQIO API",
     description="Backend API for the AVENQIO smart shopping website",
     version="1.0.0",
 )
+
+# Allow requests from the local frontend and deployed Vercel website.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "https://avenqio.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 # Temporary product data.
-# Later, we can move this into a database.
+# Later, this can be moved into a database.
 products = [
     {
         "id": 1,
@@ -76,7 +81,6 @@ def get_product(product_id: int):
         if product["id"] == product_id:
             return product
 
-    from fastapi import HTTPException
     raise HTTPException(
         status_code=404,
         detail="Product not found",
