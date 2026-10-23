@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import {
@@ -7,16 +7,42 @@ import {
   FiHeart,
   FiShoppingCart,
   FiUser,
+  FiSun,
+  FiMoon,
+  FiMenu,
+  FiX,
 } from "react-icons/fi";
+
+const navigationLinks = [
+  { label: "Home", to: "/" },
+  { label: "Products", to: "/products" },
+  { label: "Orders", to: "/orders" },
+  { label: "Wishlist", to: "/wishlist" },
+];
+
+function getInitialTheme() {
+  try {
+    const savedTheme = localStorage.getItem("avenqio-theme");
+
+    if (savedTheme === "light" || savedTheme === "dark") {
+      return savedTheme;
+    }
+
+    return window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
+  } catch {
+    return "light";
+  }
+}
 
 export default function Navbar() {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
+  const [theme, setTheme] = useState(getInitialTheme);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const cartItems = useSelector(
-    (state) => state.cart?.items ?? []
-  );
-
+  const cartItems = useSelector((state) => state.cart?.items ?? []);
   const wishlistItems = useSelector(
     (state) => state.wishlist?.items ?? []
   );
@@ -28,6 +54,30 @@ export default function Navbar() {
 
   const wishlistCount = wishlistItems.length;
 
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+
+    try {
+      localStorage.setItem("avenqio-theme", theme);
+    } catch {
+      // Theme still works for the current page if storage is unavailable.
+    }
+  }, [theme]);
+
+  useEffect(() => {
+    const closeMenuOnResize = () => {
+      if (window.innerWidth > 780) {
+        setMobileMenuOpen(false);
+      }
+    };
+
+    window.addEventListener("resize", closeMenuOnResize);
+
+    return () => {
+      window.removeEventListener("resize", closeMenuOnResize);
+    };
+  }, []);
+
   const handleSearch = (event) => {
     event.preventDefault();
 
@@ -35,130 +85,190 @@ export default function Navbar() {
 
     navigate({
       pathname: "/products",
-      search: query
-        ? `?search=${encodeURIComponent(query)}`
-        : "",
+      search: query ? `?search=${encodeURIComponent(query)}` : "",
     });
 
     setSearchTerm("");
+    setMobileMenuOpen(false);
+  };
+
+  const handleNavigation = () => {
+    setMobileMenuOpen(false);
   };
 
   const navLinkClass = ({ isActive }) =>
-    isActive
-      ? "text-blue-600 border-b-2 border-blue-600 pb-1 font-semibold"
-      : "text-gray-700 hover:text-blue-600 transition";
+    `avenqio-nav-link${isActive ? " active" : ""}`;
+
+  const themeToggle = (
+    <button
+      type="button"
+      className="avenqio-icon-button"
+      onClick={() =>
+        setTheme((currentTheme) =>
+          currentTheme === "dark" ? "light" : "dark"
+        )
+      }
+      aria-label={
+        theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
+      }
+      title={theme === "dark" ? "Light mode" : "Dark mode"}
+    >
+      {theme === "dark" ? <FiSun size={19} /> : <FiMoon size={19} />}
+    </button>
+  );
 
   return (
-    <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-xl shadow-lg">
-      <div className="mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8">
-        <div className="flex min-h-20 flex-wrap items-center justify-between gap-4 py-4 lg:flex-nowrap">
-          <Link
-            to="/"
-            className="text-3xl font-black text-blue-600 sm:text-4xl"
-          >
-            AVENQIO
-          </Link>
+    <header className="avenqio-navbar">
+      <div className="avenqio-nav-inner">
+        <Link
+          to="/"
+          className="avenqio-logo"
+          aria-label="Avenqio home"
+          onClick={handleNavigation}
+        >
+          avenqio<span>.</span>
+        </Link>
 
+        <nav className="avenqio-nav-links" aria-label="Main navigation">
+          {navigationLinks
+            .filter((item) => item.to !== "/wishlist")
+            .map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === "/"}
+                className={navLinkClass}
+              >
+                {item.label}
+              </NavLink>
+            ))}
+        </nav>
+
+        <div className="avenqio-nav-actions">
           <form
             role="search"
             onSubmit={handleSearch}
-            className="order-3 w-full lg:order-none lg:mx-6 lg:w-[420px] lg:shrink-0"
+            className="avenqio-search"
           >
-            <div className="flex items-center rounded-full bg-slate-100 px-5 py-3 transition focus-within:ring-2 focus-within:ring-blue-500">
-              <FiSearch className="shrink-0 text-xl text-gray-500" />
+            <FiSearch size={17} aria-hidden="true" />
 
-              <input
-                type="search"
-                name="search"
-                value={searchTerm}
-                onChange={(event) =>
-                  setSearchTerm(event.target.value)
-                }
-                placeholder="Search products..."
-                aria-label="Search products"
-                className="ml-3 w-full min-w-0 bg-transparent text-base outline-none placeholder:text-gray-500"
-              />
+            <input
+              type="search"
+              name="search"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search products"
+              aria-label="Search products"
+            />
 
-              {searchTerm && (
-                <button
-                  type="button"
-                  aria-label="Clear search"
-                  onClick={() => setSearchTerm("")}
-                  className="ml-2 text-sm text-gray-500 hover:text-red-500"
-                >
-                  Clear
-                </button>
-              )}
-
+            {searchTerm && (
               <button
-                type="submit"
-                aria-label="Submit product search"
-                className="ml-2 rounded-full p-1 text-gray-600 transition hover:text-blue-600"
+                type="button"
+                aria-label="Clear search"
+                onClick={() => setSearchTerm("")}
+                style={{
+                  border: 0,
+                  background: "transparent",
+                  color: "var(--text-secondary)",
+                  padding: 0,
+                }}
               >
-                <FiSearch size={20} />
+                <FiX size={15} />
               </button>
-            </div>
+            )}
           </form>
 
-          <div className="hidden items-center gap-6 lg:flex xl:gap-10">
-            <NavLink to="/" end className={navLinkClass}>
-              Home
-            </NavLink>
-            <NavLink to="/products" className={navLinkClass}>
-              Products
-            </NavLink>
-            <NavLink to="/wishlist" className={navLinkClass}>
-              Wishlist
-            </NavLink>
-            <NavLink to="/cart" className={navLinkClass}>
-              Cart
-            </NavLink>
-          </div>
+          {themeToggle}
 
-          <div className="flex items-center gap-4 sm:gap-6">
-            <Link
-              to="/wishlist"
-              aria-label={`Wishlist, ${wishlistCount} items`}
-              className="relative inline-flex transition hover:scale-110"
-            >
-              <FiHeart
-                size={26}
-                className={
-                  wishlistCount > 0
-                    ? "text-red-500"
-                    : "text-gray-700"
-                }
-              />
-              <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
+          <Link
+            to="/wishlist"
+            className="avenqio-icon-button"
+            aria-label={`Wishlist, ${wishlistCount} items`}
+            title="Wishlist"
+          >
+            <FiHeart
+              size={20}
+              color={wishlistCount > 0 ? "#e5484d" : "currentColor"}
+            />
+            {wishlistCount > 0 && (
+              <span className="avenqio-count">
                 {wishlistCount > 99 ? "99+" : wishlistCount}
               </span>
-            </Link>
+            )}
+          </Link>
 
-            <Link
-              to="/cart"
-              aria-label={`Shopping cart, ${cartCount} items`}
-              className="relative inline-flex items-center justify-center transition hover:scale-110"
-            >
-              <FiShoppingCart size={26} className="text-gray-700" />
-              <span className="absolute -right-2 -top-2 z-10 flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-xs font-bold text-white">
+          <Link
+            to="/cart"
+            className="avenqio-icon-button"
+            aria-label={`Shopping cart, ${cartCount} items`}
+            title="Shopping cart"
+          >
+            <FiShoppingCart size={20} />
+            {cartCount > 0 && (
+              <span className="avenqio-count">
                 {cartCount > 99 ? "99+" : cartCount}
               </span>
-            </Link>
+            )}
+          </Link>
 
-            <button
-              type="button"
-              onClick={() =>
-                alert("Login will be available soon!")
-              }
-              className="flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2.5 text-white transition hover:bg-blue-700 sm:px-5"
-            >
-              <FiUser />
-              <span className="hidden sm:inline">Login</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            className="avenqio-login-button"
+            onClick={() => navigate("/login")}
+          >
+            <FiUser size={17} />
+            Login
+          </button>
+
+          <button
+            type="button"
+            className="avenqio-icon-button avenqio-mobile-toggle"
+            aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileMenuOpen}
+            onClick={() => setMobileMenuOpen((open) => !open)}
+          >
+            {mobileMenuOpen ? <FiX size={22} /> : <FiMenu size={22} />}
+          </button>
         </div>
       </div>
-    </nav>
+
+      {mobileMenuOpen && (
+        <nav className="avenqio-mobile-menu" aria-label="Mobile navigation">
+          {navigationLinks.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === "/"}
+              className={navLinkClass}
+              onClick={handleNavigation}
+            >
+              {item.label}
+            </NavLink>
+          ))}
+
+          <NavLink
+            to="/cart"
+            className={navLinkClass}
+            onClick={handleNavigation}
+          >
+            Cart ({cartCount})
+          </NavLink>
+
+          <button
+            type="button"
+            className="avenqio-login-button"
+            style={{ alignSelf: "flex-start", marginTop: 8 }}
+            onClick={() => {
+              handleNavigation();
+              navigate("/login");
+            }}
+          >
+            <FiUser size={17} />
+            Login
+          </button>
+        </nav>
+      )}
+    </header>
   );
 }
 

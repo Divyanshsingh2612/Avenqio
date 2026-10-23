@@ -5,6 +5,7 @@ import { FiSearch, FiSliders, FiX } from "react-icons/fi";
 
 import ProductCard from "../../components/product/ProductCard";
 import api from "../../services/api.js";
+
 export default function Products() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -12,21 +13,23 @@ export default function Products() {
 
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Always derive the URL search value from the current query string.
+  // Read search and category directly from the URL.
   const urlSearch = searchParams.get("search") || "";
+  const urlCategory = searchParams.get("category") || "All";
 
   const [search, setSearch] = useState(urlSearch);
-  const [category, setCategory] = useState("All");
+  const [category, setCategory] = useState(urlCategory);
   const [maxPrice, setMaxPrice] = useState(150000);
   const [minRating, setMinRating] = useState(0);
   const [sort, setSort] = useState("default");
 
-  // Sync navbar searches and browser back/forward navigation.
+  // Synchronize search and category with URL navigation.
   useEffect(() => {
     setSearch(urlSearch);
-  }, [urlSearch]);
+    setCategory(urlCategory);
+  }, [urlSearch, urlCategory]);
 
-  // Fetch products from the FastAPI backend.
+  // Fetch products from the backend.
   useEffect(() => {
     let isMounted = true;
 
@@ -67,7 +70,7 @@ export default function Products() {
     };
   }, []);
 
-  // Build category options from the API response.
+  // Generate category options from actual API product categories.
   const categories = useMemo(
     () => [
       "All",
@@ -80,7 +83,7 @@ export default function Products() {
     [products]
   );
 
-  // Search, filter, and sort products.
+  // Apply search, category, price, rating and sorting.
   const filteredProducts = useMemo(() => {
     const searchTerm = search.trim().toLowerCase();
 
@@ -102,8 +105,10 @@ export default function Products() {
       const matchesSearch =
         searchTerm === "" || searchableText.includes(searchTerm);
 
+      // Compare categories without case sensitivity.
       const matchesCategory =
-        category === "All" || productCategory === category;
+        category === "All" ||
+        productCategory.toLowerCase() === category.toLowerCase();
 
       const price = Number(product.price ?? 0);
       const rating = Number(product.rating ?? 0);
@@ -144,43 +149,65 @@ export default function Products() {
     return result;
   }, [products, search, category, maxPrice, minRating, sort]);
 
-  // Submit the products-page search to the URL.
+  // Keep search and category in the URL.
   function handleSearchSubmit(event) {
     event.preventDefault();
 
     const query = search.trim();
+    const params = new URLSearchParams(searchParams);
 
-    setSearchParams(
-      query ? { search: query } : {}
-    );
+    if (query) {
+      params.set("search", query);
+    } else {
+      params.delete("search");
+    }
+
+    setSearchParams(params);
   }
 
-  // Clear search and all filters.
+  // Update the category selection and URL together.
+  function handleCategoryChange(event) {
+    const selectedCategory = event.target.value;
+
+    setCategory(selectedCategory);
+
+    const params = new URLSearchParams(searchParams);
+
+    if (selectedCategory === "All") {
+      params.delete("category");
+    } else {
+      params.set("category", selectedCategory);
+    }
+
+    setSearchParams(params);
+  }
+
+  // Clear all filters.
   function clearFilters() {
     setSearch("");
-    setSearchParams({});
     setCategory("All");
     setMaxPrice(150000);
     setMinRating(0);
     setSort("default");
+    setSearchParams({});
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 py-10">
+    <main className="min-h-screen bg-slate-50 py-10 dark:bg-[#111113]">
       <div className="mx-auto max-w-[1400px] px-6 lg:px-8">
         {/* Header */}
         <div className="mb-10">
-          <h1 className="text-4xl font-black text-slate-900 md:text-5xl">
-            All Products
+          <h1 className="text-4xl font-black text-slate-900 dark:text-white md:text-5xl">
+            {category === "All" ? "All Products" : category}
           </h1>
 
-          <p className="mt-3 text-lg text-gray-500">
+          <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">
             Find the perfect products for you.
           </p>
         </div>
 
         {/* Product search */}
-        <div className="mb-8 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+        <div className="mb-8 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#1c1c1e]">
           <form
             role="search"
             onSubmit={handleSearchSubmit}
@@ -198,17 +225,17 @@ export default function Products() {
               aria-label="Search products"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              className="w-full rounded-xl bg-slate-100 py-3.5 pl-12 pr-4 outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-xl bg-slate-100 py-3.5 pl-12 pr-4 text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 dark:bg-[#29292c] dark:text-white"
             />
           </form>
         </div>
 
         {/* Filters */}
-        <div className="mb-10 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+        <div className="mb-10 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#1c1c1e]">
           <div className="mb-6 flex items-center gap-3">
             <FiSliders className="text-blue-600" size={22} />
 
-            <h2 className="text-xl font-bold text-slate-900">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">
               Filters
             </h2>
           </div>
@@ -216,15 +243,27 @@ export default function Products() {
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             {/* Category */}
             <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">
+              <label
+                htmlFor="product-category"
+                className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-300"
+              >
                 Category
               </label>
 
               <select
+                id="product-category"
                 value={category}
-                onChange={(event) => setCategory(event.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={handleCategoryChange}
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 dark:border-white/10 dark:bg-[#29292c] dark:text-white"
               >
+                {category !== "All" &&
+                  !categories.some(
+                    (item) =>
+                      item.toLowerCase() === category.toLowerCase()
+                  ) && (
+                    <option value={category}>{category}</option>
+                  )}
+
                 {categories.map((item) => (
                   <option key={item} value={item}>
                     {item}
@@ -235,12 +274,16 @@ export default function Products() {
 
             {/* Maximum price */}
             <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">
+              <label
+                htmlFor="max-price"
+                className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-300"
+              >
                 Maximum Price
               </label>
 
               <div className="flex items-center gap-3">
                 <input
+                  id="max-price"
                   type="range"
                   min="0"
                   max="150000"
@@ -260,16 +303,20 @@ export default function Products() {
 
             {/* Minimum rating */}
             <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">
+              <label
+                htmlFor="min-rating"
+                className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-300"
+              >
                 Minimum Rating
               </label>
 
               <select
+                id="min-rating"
                 value={minRating}
                 onChange={(event) =>
                   setMinRating(Number(event.target.value))
                 }
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 dark:border-white/10 dark:bg-[#29292c] dark:text-white"
               >
                 <option value={0}>All Ratings</option>
                 <option value={4}>⭐ 4.0+</option>
@@ -280,14 +327,18 @@ export default function Products() {
 
             {/* Sorting */}
             <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">
+              <label
+                htmlFor="product-sort"
+                className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-300"
+              >
                 Sort By
               </label>
 
               <select
+                id="product-sort"
                 value={sort}
                 onChange={(event) => setSort(event.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 dark:border-white/10 dark:bg-[#29292c] dark:text-white"
               >
                 <option value="default">Recommended</option>
                 <option value="price-low">Price: Low → High</option>
@@ -310,8 +361,8 @@ export default function Products() {
 
         {/* Loading */}
         {loading && (
-          <div className="rounded-2xl bg-white p-12 text-center shadow-sm">
-            <p className="font-semibold text-slate-700">
+          <div className="rounded-2xl bg-white p-12 text-center shadow-sm dark:bg-[#1c1c1e]">
+            <p className="font-semibold text-slate-700 dark:text-gray-200">
               Loading products...
             </p>
           </div>
@@ -319,12 +370,14 @@ export default function Products() {
 
         {/* Error */}
         {!loading && error && (
-          <div className="rounded-2xl border border-red-100 bg-white p-10 text-center">
+          <div className="rounded-2xl border border-red-100 bg-white p-10 text-center dark:border-red-900 dark:bg-[#1c1c1e]">
             <h2 className="text-xl font-bold text-red-600">
               Could not load products
             </h2>
 
-            <p className="mt-3 text-gray-600">{error}</p>
+            <p className="mt-3 text-gray-600 dark:text-gray-400">
+              {error}
+            </p>
 
             <button
               type="button"
@@ -340,9 +393,9 @@ export default function Products() {
         {!loading && !error && (
           <>
             <div className="mb-6">
-              <p className="text-gray-600">
+              <p className="text-gray-600 dark:text-gray-400">
                 Showing{" "}
-                <span className="font-bold text-slate-900">
+                <span className="font-bold text-slate-900 dark:text-white">
                   {filteredProducts.length}
                 </span>{" "}
                 products
@@ -362,13 +415,13 @@ export default function Products() {
                 ))}
               </div>
             ) : (
-              <div className="rounded-3xl bg-white p-16 text-center shadow-sm">
-                <h2 className="text-2xl font-bold text-slate-900">
+              <div className="rounded-3xl bg-white p-16 text-center shadow-sm dark:bg-[#1c1c1e]">
+                <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
                   No products found
                 </h2>
 
-                <p className="mt-2 text-gray-500">
-                  Try another search or change your filters.
+                <p className="mt-2 text-gray-500 dark:text-gray-400">
+                  Try another category, search, or filter.
                 </p>
 
                 <button
@@ -386,4 +439,3 @@ export default function Products() {
     </main>
   );
 }
-

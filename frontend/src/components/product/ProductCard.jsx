@@ -1,10 +1,11 @@
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   FiHeart,
   FiShoppingCart,
   FiStar,
   FiCheck,
+  FiArrowUpRight,
 } from "react-icons/fi";
 import { Link } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
@@ -23,8 +24,21 @@ export default function ProductCard({ product }) {
   );
 
   const isWishlisted = wishlistItems.some(
-    (item) => item.id === product.id
+    (item) => item.id === product?.id
   );
+
+  const isOutOfStock =
+    typeof product?.stock === "number" && product.stock <= 0;
+
+  useEffect(() => {
+    if (!added) return;
+
+    const timeoutId = setTimeout(() => {
+      setAdded(false);
+    }, 1500);
+
+    return () => clearTimeout(timeoutId);
+  }, [added]);
 
   const handleWishlist = () => {
     if (!product?.id) return;
@@ -37,24 +51,13 @@ export default function ProductCard({ product }) {
   };
 
   const handleAddToCart = () => {
-    if (!product || !product.id) {
-      console.error("Cannot add product: product ID is missing.", product);
-      return;
-    }
-
-    if (typeof product.stock === "number" && product.stock <= 0) {
-      return;
-    }
+    if (!product?.id || isOutOfStock) return;
 
     dispatch(addToCart(product));
     setAdded(true);
-
-    setTimeout(() => {
-      setAdded(false);
-    }, 1500);
   };
 
-  const heartButton = (className) => (
+  const heartButton = (extraClasses = "") => (
     <button
       type="button"
       onClick={handleWishlist}
@@ -65,96 +68,142 @@ export default function ProductCard({ product }) {
       }
       aria-pressed={isWishlisted}
       title={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
-      className={`${className} ${
+      className={`inline-flex items-center justify-center rounded-full transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
         isWishlisted
           ? "text-red-500"
-          : "text-gray-500 hover:text-red-500"
-      }`}
+          : "text-[#6e6e73] hover:text-red-500 dark:text-[#a1a1a6]"
+      } ${extraClasses}`}
     >
       <FiHeart
-        size={20}
+        size={19}
         fill={isWishlisted ? "currentColor" : "none"}
       />
     </button>
   );
 
+  const price = Number(product?.price ?? 0);
+
   return (
-    <div className="group overflow-hidden rounded-3xl bg-white shadow-md transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl">
-      <div className="relative overflow-hidden">
-        <Link to={`/products/${product.id}`}>
-          <img
-            src={product.image}
-            alt={product.name}
-            className="h-64 w-full object-contain p-4"
-          />
+    <article className="group relative flex h-full flex-col overflow-hidden rounded-[24px] border border-black/[0.06] bg-white shadow-[0_2px_12px_rgba(0,0,0,0.025)] transition-all duration-300 hover:-translate-y-1 hover:border-black/10 hover:shadow-[0_16px_40px_rgba(0,0,0,0.09)] dark:border-white/[0.08] dark:bg-[#1c1c1e] dark:hover:border-white/15 dark:hover:shadow-black/20">
+      {/* Product image */}
+      <div className="relative m-2 overflow-hidden rounded-[19px] bg-[#f5f5f7] dark:bg-[#242426]">
+        <Link
+          to={`/products/${product.id}`}
+          aria-label={`View ${product.name}`}
+          className="block"
+        >
+          <div className="flex aspect-[4/3] items-center justify-center overflow-hidden p-5 sm:p-6">
+            <img
+              src={product.image}
+              alt={product.name}
+              loading="lazy"
+              className="h-full w-full object-contain transition-transform duration-500 ease-out group-hover:scale-105"
+            />
+          </div>
         </Link>
 
-        <span className="absolute left-4 top-4 rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white">
-          {product.category}
-        </span>
+        {product.category && (
+          <span className="absolute left-3 top-3 max-w-[65%] truncate rounded-full border border-black/[0.05] bg-white/85 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#424245] backdrop-blur-md dark:border-white/10 dark:bg-[#1c1c1e]/85 dark:text-[#d1d1d6]">
+            {product.category}
+          </span>
+        )}
 
         {heartButton(
-          "absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-lg transition-all duration-300 hover:bg-red-50"
+          "absolute right-3 top-3 h-10 w-10 border border-black/[0.05] bg-white/90 shadow-sm backdrop-blur-md hover:bg-white dark:border-white/10 dark:bg-[#1c1c1e]/90 dark:hover:bg-[#303033]"
+        )}
+
+        {isOutOfStock && (
+          <span className="absolute bottom-3 left-3 rounded-full bg-black/75 px-3 py-1.5 text-xs font-medium text-white">
+            Out of stock
+          </span>
         )}
       </div>
 
-      <div className="p-6">
-        <Link to={`/products/${product.id}`}>
-          <h3 className="text-xl font-bold text-slate-900 transition hover:text-blue-600">
-            {product.name}
-          </h3>
-        </Link>
+      {/* Product details */}
+      <div className="flex flex-1 flex-col px-4 pb-4 pt-3 sm:px-5 sm:pb-5">
+        <div className="flex items-start justify-between gap-2">
+          <Link
+            to={`/products/${product.id}`}
+            className="min-w-0 flex-1"
+          >
+            <h3 className="line-clamp-2 text-base font-semibold leading-6 tracking-[-0.025em] text-[#1d1d1f] transition-colors hover:text-blue-600 dark:text-[#f5f5f7] dark:hover:text-blue-400 sm:text-lg">
+              {product.name}
+            </h3>
+          </Link>
 
-        <div className="mt-3 flex items-center gap-2">
-          <div className="flex items-center text-yellow-500">
-            <FiStar fill="currentColor" size={18} />
-          </div>
-          <span className="font-medium text-gray-600">
-            {product.rating}
+          <Link
+            to={`/products/${product.id}`}
+            aria-label={`View details for ${product.name}`}
+            className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#86868b] transition-all hover:bg-[#f5f5f7] hover:text-[#1d1d1f] dark:hover:bg-[#303033] dark:hover:text-white"
+          >
+            <FiArrowUpRight size={17} />
+          </Link>
+        </div>
+
+        <div className="mt-3 flex min-h-5 items-center gap-1.5">
+          <FiStar
+            size={15}
+            className="shrink-0 text-amber-500"
+            fill="currentColor"
+          />
+
+          <span className="text-sm font-medium text-[#424245] dark:text-[#e5e5ea]">
+            {product.rating ?? "New"}
           </span>
+
+          {product.rating != null && (
+            <span className="text-xs text-[#86868b]">
+              · Customer rating
+            </span>
+          )}
         </div>
 
-        <div className="mt-4">
-          <p className="text-2xl font-bold text-blue-600">
-            ₹{Number(product.price || 0).toLocaleString("en-IN")}
+        <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2">
+          <p className="text-xl font-semibold tracking-[-0.04em] text-[#1d1d1f] dark:text-[#f5f5f7] sm:text-2xl">
+            ₹{price.toLocaleString("en-IN")}
           </p>
+
+          {typeof product.stock === "number" && !isOutOfStock && (
+            <span className="text-[11px] font-medium text-[#6e6e73] dark:text-[#a1a1a6]">
+              In stock
+            </span>
+          )}
         </div>
 
-        <div className="mt-6 flex gap-3">
+        {/* Actions */}
+        <div className="mt-auto flex items-center gap-2 pt-5">
           <button
             type="button"
             onClick={handleAddToCart}
-            disabled={
-              typeof product.stock === "number" && product.stock <= 0
-            }
-            className={`flex-1 rounded-xl py-3 font-semibold text-white transition duration-300 ${
-              typeof product.stock === "number" && product.stock <= 0
-                ? "cursor-not-allowed bg-gray-400"
+            disabled={isOutOfStock}
+            className={`inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full px-3 py-3 text-sm font-semibold transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
+              isOutOfStock
+                ? "cursor-not-allowed bg-[#e5e5e7] text-[#86868b] dark:bg-[#303033] dark:text-[#86868b]"
                 : added
-                  ? "bg-green-600"
-                  : "bg-blue-600 hover:bg-blue-700"
-            } flex items-center justify-center gap-2`}
+                  ? "bg-emerald-600 text-white"
+                  : "bg-[#1d1d1f] text-white hover:bg-black active:scale-[0.98] dark:bg-white dark:text-[#1d1d1f] dark:hover:bg-gray-200"
+            }`}
           >
-            {typeof product.stock === "number" && product.stock <= 0 ? (
-              "Out of Stock"
+            {isOutOfStock ? (
+              "Unavailable"
             ) : added ? (
               <>
-                <FiCheck size={18} />
-                Added!
+                <FiCheck size={17} />
+                Added
               </>
             ) : (
               <>
-                <FiShoppingCart size={18} />
-                Add to Cart
+                <FiShoppingCart size={16} />
+                Add to cart
               </>
             )}
           </button>
 
           {heartButton(
-            "flex h-12 w-12 items-center justify-center rounded-xl border border-gray-300 transition duration-300 hover:border-red-500"
+            "h-11 w-11 shrink-0 border border-black/10 bg-white hover:border-red-200 hover:bg-red-50 dark:border-white/10 dark:bg-transparent dark:hover:border-red-500/40 dark:hover:bg-red-500/10"
           )}
         </div>
       </div>
-    </div>
+    </article>
   );
 }
