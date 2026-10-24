@@ -1,7 +1,7 @@
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import {
   FiUser,
   FiMail,
@@ -16,6 +16,9 @@ import {
   FiShield,
 } from "react-icons/fi";
 
+import api from "../../services/api";
+import { updateUser } from "../../features/auth/authSlice";
+
 const EMPTY_PROFILE = {
   fullName: "",
   email: "",
@@ -23,59 +26,129 @@ const EMPTY_PROFILE = {
   address: "",
 };
 
+function readSavedProfile() {
+  try {
+    const saved = localStorage.getItem("avenqio-profile");
+    return saved ? JSON.parse(saved) : {};
+  } catch {
+    return {};
+  }
+}
+
 export default function Profile() {
+  const dispatch = useDispatch();
+
   const orders = useSelector((state) => state.orders?.items || []);
   const wishlist = useSelector((state) => state.wishlist?.items || []);
+  const authUser = useSelector((state) => state.auth?.user);
+  const token = useSelector((state) => state.auth?.token);
 
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(Boolean(token));
+  const [loadError, setLoadError] = useState("");
 
   const [profile, setProfile] = useState(() => {
-    try {
-      const stored = localStorage.getItem("avenqio-profile");
-      return stored
-        ? { ...EMPTY_PROFILE, ...JSON.parse(stored) }
-        : { ...EMPTY_PROFILE };
-    } catch {
-      return { ...EMPTY_PROFILE };
-    }
+    const localProfile = readSavedProfile();
+
+    return {
+      ...EMPTY_PROFILE,
+      ...localProfile,
+      fullName: authUser?.full_name || localProfile.fullName || "",
+      email: authUser?.email || localProfile.email || "",
+    };
   });
 
-  const updateField = (e) => {
-    const { name, value } = e.target;
-    setProfile((previous) => ({ ...previous, [name]: value }));
+  // Fetch the authenticated user's authoritative details from FastAPI.
+  useEffect(() => {
+    if (!token) {
+      setLoading(false);
+      setLoadError("");
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadProfile = async () => {
+      setLoading(true);
+      setLoadError("");
+
+      try {
+        const response = await api.get("/api/auth/me");
+
+        if (cancelled) return;
+
+        const user = response.data;
+
+        dispatch(updateUser(user));
+
+        setProfile((previous) => ({
+          ...previous,
+          fullName: user.full_name || "",
+          email: user.email || "",
+        }));
+      } catch (error) {
+        if (cancelled) return;
+
+        console.error("Failed to load authenticated profile:", error);
+        setLoadError(
+          error.response?.status === 401
+            ? "Your session has expired. Please log in again."
+            : "We couldn't load your account details. Please try again."
+        );
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    loadProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, dispatch]);
+
+  const updateField = (event) => {
+    const { name, value } = event.target;
+
+    setProfile((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+
     setSaved(false);
   };
 
-  const saveProfile = (e) => {
-    e.preventDefault();
+  const saveProfile = (event) => {
+    event.preventDefault();
 
     try {
+      // Phone and address are currently local-only fields.
       localStorage.setItem("avenqio-profile", JSON.stringify(profile));
       setEditing(false);
       setSaved(true);
     } catch {
       setSaved(false);
-      alert("Unable to save your profile. Please check your browser storage.");
+      alert("Unable to save your profile. Please check browser storage.");
     }
   };
 
   const cancelEditing = () => {
-    try {
-      const stored = localStorage.getItem("avenqio-profile");
-      setProfile(stored
-        ? { ...EMPTY_PROFILE, ...JSON.parse(stored) }
-        : { ...EMPTY_PROFILE });
-    } catch {
-      setProfile({ ...EMPTY_PROFILE });
-    }
+    const localProfile = readSavedProfile();
+
+    setProfile({
+      ...EMPTY_PROFILE,
+      ...localProfile,
+      fullName: authUser?.full_name || localProfile.fullName || "",
+      email: authUser?.email || localProfile.email || "",
+    });
 
     setEditing(false);
     setSaved(false);
   };
 
   const inputClass =
-    "w-full rounded-xl border border-gray-200 bg-white px-4 py-3 pl-11 text-sm text-gray-900 outline-none transition focus:border-violet-500 focus:ring-2 focus:ring-violet-100 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:ring-violet-500/20";
+    "w-full rounded-xl border border-gray-200 bg-white py-3 pl-11 pr-4 text-sm text-gray-900 outline-none transition focus:border-violet-500 focus:ring-2 focus:ring-violet-100 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:ring-violet-500/20";
 
   const labelClass =
     "mb-2 block text-sm font-medium text-gray-600 dark:text-gray-300";
@@ -116,7 +189,6 @@ export default function Profile() {
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-10 text-gray-900 transition-colors dark:bg-[#09090b] dark:text-white sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl">
-        {/* Page heading */}
         <div className="mb-10">
           <p className="mb-2 text-sm font-semibold uppercase tracking-[0.2em] text-violet-600 dark:text-violet-400">
             Your account
@@ -131,6 +203,22 @@ export default function Profile() {
           </p>
         </div>
 
+        {loadError && (
+          <div
+            role="alert"
+            className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300"
+          >
+            <span>{loadError}</span>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="font-semibold underline"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[300px_1fr]">
           {/* Profile sidebar */}
           <aside className="h-fit rounded-3xl border border-gray-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#111113]">
@@ -144,11 +232,13 @@ export default function Profile() {
               </div>
 
               <h2 className="mt-4 break-words text-xl font-bold">
-                {profile.fullName || "Welcome, Shopper!"}
+                {loading
+                  ? "Loading profile..."
+                  : profile.fullName || "Welcome, Shopper!"}
               </h2>
 
               <p className="mt-1 break-all text-sm text-gray-500 dark:text-gray-400">
-                {profile.email || "Add your email address"}
+                {profile.email || "Your account email will appear here"}
               </p>
 
               <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">
@@ -189,10 +279,7 @@ export default function Profile() {
           <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#111113] sm:p-8">
             <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
               <div>
-                <h2 className="text-xl font-bold">
-                  Personal Information
-                </h2>
-
+                <h2 className="text-xl font-bold">Personal Information</h2>
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   Keep your contact details up to date.
                 </p>
@@ -241,7 +328,7 @@ export default function Profile() {
                           value={profile[name] || ""}
                           onChange={updateField}
                           placeholder={placeholder}
-                          readOnly={!editing}
+                          readOnly={!editing || (name === "fullName" && Boolean(authUser?.full_name)) || (name === "email" && Boolean(authUser?.email))}
                           required={editing && required}
                           autoComplete={
                             name === "fullName"
@@ -291,9 +378,7 @@ export default function Profile() {
                   <FiPackage size={21} />
                 </div>
 
-                <p className="mt-4 text-2xl font-bold">
-                  {orders.length}
-                </p>
+                <p className="mt-4 text-2xl font-bold">{orders.length}</p>
 
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   Orders placed on this device
@@ -305,9 +390,7 @@ export default function Profile() {
                   <FiHeart size={21} />
                 </div>
 
-                <p className="mt-4 text-2xl font-bold">
-                  {wishlist.length}
-                </p>
+                <p className="mt-4 text-2xl font-bold">{wishlist.length}</p>
 
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   Saved wishlist items
@@ -317,9 +400,7 @@ export default function Profile() {
 
             {/* Shopping call to action */}
             <div className="mt-8 rounded-2xl border border-violet-100 bg-violet-50/70 p-5 dark:border-violet-500/15 dark:bg-violet-500/[0.06]">
-              <h3 className="font-semibold">
-                Shopping with Avenqio
-              </h3>
+              <h3 className="font-semibold">Shopping with Avenqio</h3>
 
               <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-400">
                 Discover products, save your favourites, and manage your
