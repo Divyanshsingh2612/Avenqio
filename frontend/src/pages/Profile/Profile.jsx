@@ -1,6 +1,6 @@
 
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
   FiUser,
@@ -14,10 +14,14 @@ import {
   FiX,
   FiArrowRight,
   FiShield,
+  FiLogOut,
 } from "react-icons/fi";
 
 import api from "../../services/api";
-import { updateUser } from "../../features/auth/authSlice";
+import {
+  updateUser,
+  logout,
+} from "../../features/auth/authSlice";
 
 const EMPTY_PROFILE = {
   fullName: "",
@@ -37,11 +41,23 @@ function readSavedProfile() {
 
 export default function Profile() {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
 
-  const orders = useSelector((state) => state.orders?.items || []);
-  const wishlist = useSelector((state) => state.wishlist?.items || []);
-  const authUser = useSelector((state) => state.auth?.user);
-  const token = useSelector((state) => state.auth?.token);
+  const orders = useSelector(
+    (state) => state.orders?.items || []
+  );
+
+  const wishlist = useSelector(
+    (state) => state.wishlist?.items || []
+  );
+
+  const authUser = useSelector(
+    (state) => state.auth?.user
+  );
+
+  const token = useSelector(
+    (state) => state.auth?.token
+  );
 
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -54,12 +70,14 @@ export default function Profile() {
     return {
       ...EMPTY_PROFILE,
       ...localProfile,
-      fullName: authUser?.full_name || localProfile.fullName || "",
-      email: authUser?.email || localProfile.email || "",
+      fullName:
+        authUser?.full_name || localProfile.fullName || "",
+      email:
+        authUser?.email || localProfile.email || "",
     };
   });
 
-  // Fetch the authenticated user's authoritative details from FastAPI.
+  // Fetch the logged-in user's account details.
   useEffect(() => {
     if (!token) {
       setLoading(false);
@@ -90,14 +108,20 @@ export default function Profile() {
       } catch (error) {
         if (cancelled) return;
 
-        console.error("Failed to load authenticated profile:", error);
+        console.error(
+          "Failed to load authenticated profile:",
+          error
+        );
+
         setLoadError(
           error.response?.status === 401
             ? "Your session has expired. Please log in again."
             : "We couldn't load your account details. Please try again."
         );
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
@@ -107,6 +131,12 @@ export default function Profile() {
       cancelled = true;
     };
   }, [token, dispatch]);
+
+  // Log out the current user.
+  const handleLogout = () => {
+    dispatch(logout());
+    navigate("/login", { replace: true });
+  };
 
   const updateField = (event) => {
     const { name, value } = event.target;
@@ -123,13 +153,19 @@ export default function Profile() {
     event.preventDefault();
 
     try {
-      // Phone and address are currently local-only fields.
-      localStorage.setItem("avenqio-profile", JSON.stringify(profile));
+      // Phone and address are currently saved locally.
+      localStorage.setItem(
+        "avenqio-profile",
+        JSON.stringify(profile)
+      );
+
       setEditing(false);
       setSaved(true);
     } catch {
       setSaved(false);
-      alert("Unable to save your profile. Please check browser storage.");
+      alert(
+        "Unable to save your profile. Please check browser storage."
+      );
     }
   };
 
@@ -139,8 +175,10 @@ export default function Profile() {
     setProfile({
       ...EMPTY_PROFILE,
       ...localProfile,
-      fullName: authUser?.full_name || localProfile.fullName || "",
-      email: authUser?.email || localProfile.email || "",
+      fullName:
+        authUser?.full_name || localProfile.fullName || "",
+      email:
+        authUser?.email || localProfile.email || "",
     });
 
     setEditing(false);
@@ -189,13 +227,15 @@ export default function Profile() {
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-10 text-gray-900 transition-colors dark:bg-[#09090b] dark:text-white sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl">
+        {/* Page heading */}
         <div className="mb-10">
           <p className="mb-2 text-sm font-semibold uppercase tracking-[0.2em] text-violet-600 dark:text-violet-400">
             Your account
           </p>
 
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-            My Profile<span className="text-violet-600">.</span>
+            My Profile
+            <span className="text-violet-600">.</span>
           </h1>
 
           <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
@@ -203,12 +243,14 @@ export default function Profile() {
           </p>
         </div>
 
+        {/* Error message */}
         {loadError && (
           <div
             role="alert"
             className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300"
           >
             <span>{loadError}</span>
+
             <button
               type="button"
               onClick={() => window.location.reload()}
@@ -273,13 +315,26 @@ export default function Profile() {
                 {wishlist.length}
               </span>
             </Link>
+
+            {/* Logout button */}
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="mt-5 flex w-full items-center justify-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
+            >
+              <FiLogOut size={18} />
+              Logout
+            </button>
           </aside>
 
           {/* Personal information */}
           <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#111113] sm:p-8">
             <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
               <div>
-                <h2 className="text-xl font-bold">Personal Information</h2>
+                <h2 className="text-xl font-bold">
+                  Personal Information
+                </h2>
+
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   Keep your contact details up to date.
                 </p>
@@ -312,7 +367,14 @@ export default function Profile() {
             <form onSubmit={saveProfile}>
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                 {fields.map(
-                  ({ name, label, icon: Icon, placeholder, type, required }) => (
+                  ({
+                    name,
+                    label,
+                    icon: Icon,
+                    placeholder,
+                    type,
+                    required,
+                  }) => (
                     <div key={name}>
                       <label className={labelClass} htmlFor={name}>
                         {label}
@@ -328,16 +390,22 @@ export default function Profile() {
                           value={profile[name] || ""}
                           onChange={updateField}
                           placeholder={placeholder}
-                          readOnly={!editing || (name === "fullName" && Boolean(authUser?.full_name)) || (name === "email" && Boolean(authUser?.email))}
+                          readOnly={
+                            !editing ||
+                            (name === "fullName" &&
+                              Boolean(authUser?.full_name)) ||
+                            (name === "email" &&
+                              Boolean(authUser?.email))
+                          }
                           required={editing && required}
                           autoComplete={
                             name === "fullName"
                               ? "name"
                               : name === "email"
-                                ? "email"
-                                : name === "phone"
-                                  ? "tel"
-                                  : "street-address"
+                              ? "email"
+                              : name === "phone"
+                              ? "tel"
+                              : "street-address"
                           }
                           className={`${inputClass} ${
                             !editing ? "cursor-default opacity-80" : ""
@@ -378,7 +446,9 @@ export default function Profile() {
                   <FiPackage size={21} />
                 </div>
 
-                <p className="mt-4 text-2xl font-bold">{orders.length}</p>
+                <p className="mt-4 text-2xl font-bold">
+                  {orders.length}
+                </p>
 
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   Orders placed on this device
@@ -390,7 +460,9 @@ export default function Profile() {
                   <FiHeart size={21} />
                 </div>
 
-                <p className="mt-4 text-2xl font-bold">{wishlist.length}</p>
+                <p className="mt-4 text-2xl font-bold">
+                  {wishlist.length}
+                </p>
 
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   Saved wishlist items
@@ -400,7 +472,9 @@ export default function Profile() {
 
             {/* Shopping call to action */}
             <div className="mt-8 rounded-2xl border border-violet-100 bg-violet-50/70 p-5 dark:border-violet-500/15 dark:bg-violet-500/[0.06]">
-              <h3 className="font-semibold">Shopping with Avenqio</h3>
+              <h3 className="font-semibold">
+                Shopping with Avenqio
+              </h3>
 
               <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-400">
                 Discover products, save your favourites, and manage your
