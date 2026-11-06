@@ -22,3 +22,6 @@ Thumbs.db
 # VS Code
 .vscode/*
 !.vscode/extensions.json 
+# Local database and sensitive files
+*.db
+er.email

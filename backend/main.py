@@ -8,33 +8,62 @@ import jwt
 from pwdlib import PasswordHash
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
-from sqlalchemy import Boolean, DateTime, Integer, String, create_engine, select
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Integer,
+    String,
+    create_engine,
+    inspect,
+    select,
+    text,
+)
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    Session,
+    mapped_column,
+    sessionmaker,
+)
 
 
 # ---------------- CONFIGURATION ----------------
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./avenqio.db")
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "sqlite:///./avenqio.db",
+)
 
-# Local fallback is for development only. Set JWT_SECRET_KEY in production.
+# Local fallback is for development only.
+# Set JWT_SECRET_KEY in production.
 JWT_SECRET_KEY = os.getenv(
     "JWT_SECRET_KEY",
     "local-development-only-change-this-secret-before-deployment",
 )
+
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_MINUTES = 30
 
-connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+connect_args = (
+    {"check_same_thread": False}
+    if DATABASE_URL.startswith("sqlite")
+    else {}
+)
 
 engine = create_engine(
     DATABASE_URL,
     connect_args=connect_args,
     pool_pre_ping=True,
 )
-SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+SessionLocal = sessionmaker(
+    bind=engine,
+    autoflush=False,
+    expire_on_commit=False,
+)
 
 
 # ---------------- DATABASE ----------------
@@ -46,11 +75,45 @@ class Base(DeclarativeBase):
 class User(Base):
     __tablename__ = "users"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    full_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
-    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    full_name: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    email: Mapped[str] = mapped_column(
+        String(255),
+        unique=True,
+        index=True,
+        nullable=False,
+    )
+
+    hashed_password: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    phone: Mapped[str | None] = mapped_column(
+        String(30),
+        nullable=True,
+    )
+
+    address: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -66,9 +129,38 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
+def migrate_user_profile_columns():
+    """
+    Add phone and address to an existing users table.
+    create_all() creates tables, but does not add columns
+    to tables that already exist.
+    """
+    inspector = inspect(engine)
+
+    if "users" not in inspector.get_table_names():
+        return
+
+    existing_columns = {
+        column["name"]
+        for column in inspector.get_columns("users")
+    }
+
+    with engine.begin() as connection:
+        if "phone" not in existing_columns:
+            connection.execute(
+                text("ALTER TABLE users ADD COLUMN phone VARCHAR(30)")
+            )
+
+        if "address" not in existing_columns:
+            connection.execute(
+                text("ALTER TABLE users ADD COLUMN address VARCHAR(500)")
+            )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    migrate_user_profile_columns()
     yield
 
 
@@ -77,7 +169,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AVENQIO API",
     description="Backend API for the AVENQIO smart shopping website",
-    version="2.0.0",
+    version="2.2.0",
     lifespan=lifespan,
 )
 
@@ -99,21 +191,34 @@ app.add_middleware(
 # ---------------- PASSWORDS & JWT ----------------
 
 password_hasher = PasswordHash.recommended()
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+
+# This creates a simple Bearer-token field in Swagger.
+# It does NOT try to submit username/password to the login endpoint.
+bearer_scheme = HTTPBearer(
+    scheme_name="BearerAuth",
+    description="Paste the access_token returned by POST /api/auth/login.",
+    auto_error=False,
+)
 
 
 def create_access_token(user_id: int) -> str:
     now = datetime.now(timezone.utc)
+
     payload = {
         "sub": str(user_id),
         "iat": now,
         "exp": now + timedelta(minutes=ACCESS_TOKEN_MINUTES),
     }
-    return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+
+    return jwt.encode(
+        payload,
+        JWT_SECRET_KEY,
+        algorithm=JWT_ALGORITHM,
+    )
 
 
 def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
     unauthorized = HTTPException(
@@ -122,20 +227,30 @@ def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
+    if credentials is None:
+        raise unauthorized
+
+    token = credentials.credentials
+
     try:
         payload = jwt.decode(
             token,
             JWT_SECRET_KEY,
             algorithms=[JWT_ALGORITHM],
         )
+
         subject = payload.get("sub")
+
         if not subject:
             raise unauthorized
+
         user_id = int(subject)
+
     except (jwt.InvalidTokenError, ValueError, TypeError):
         raise unauthorized
 
     user = db.get(User, user_id)
+
     if user is None or not user.is_active:
         raise unauthorized
 
@@ -145,14 +260,38 @@ def get_current_user(
 # ---------------- REQUEST & RESPONSE SCHEMAS ----------------
 
 class RegisterRequest(BaseModel):
-    full_name: str = Field(min_length=2, max_length=100)
+    full_name: str = Field(
+        min_length=2,
+        max_length=100,
+    )
+
     email: EmailStr
-    password: str = Field(min_length=8, max_length=128)
+
+    password: str = Field(
+        min_length=8,
+        max_length=128,
+    )
 
 
 class LoginRequest(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=1, max_length=128)
+
+    password: str = Field(
+        min_length=1,
+        max_length=128,
+    )
+
+
+class ProfileUpdateRequest(BaseModel):
+    phone: str | None = Field(
+        default=None,
+        max_length=30,
+    )
+
+    address: str | None = Field(
+        default=None,
+        max_length=500,
+    )
 
 
 class UserResponse(BaseModel):
@@ -161,6 +300,8 @@ class UserResponse(BaseModel):
     id: int
     full_name: str
     email: EmailStr
+    phone: str | None = None
+    address: str | None = None
     is_active: bool
     created_at: datetime
 
@@ -178,14 +319,23 @@ class AuthResponse(BaseModel):
     response_model=AuthResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def register(payload: RegisterRequest, db: Session = Depends(get_db)):
+def register(
+    payload: RegisterRequest,
+    db: Session = Depends(get_db),
+):
     full_name = payload.full_name.strip()
     email = str(payload.email).strip().lower()
 
     if len(full_name) < 2:
-        raise HTTPException(status_code=422, detail="Please enter your full name.")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Please enter your full name.",
+        )
 
-    existing_user = db.scalar(select(User).where(User.email == email))
+    existing_user = db.scalar(
+        select(User).where(User.email == email)
+    )
+
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -197,11 +347,13 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
         email=email,
         hashed_password=password_hasher.hash(payload.password),
     )
+
     db.add(user)
 
     try:
         db.commit()
         db.refresh(user)
+
     except IntegrityError:
         db.rollback()
         raise HTTPException(
@@ -215,14 +367,26 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     )
 
 
-@app.post("/api/auth/login", response_model=AuthResponse)
-def login(payload: LoginRequest, db: Session = Depends(get_db)):
+@app.post(
+    "/api/auth/login",
+    response_model=AuthResponse,
+)
+def login(
+    payload: LoginRequest,
+    db: Session = Depends(get_db),
+):
     email = str(payload.email).strip().lower()
-    user = db.scalar(select(User).where(User.email == email))
+
+    user = db.scalar(
+        select(User).where(User.email == email)
+    )
 
     if (
         user is None
-        or not password_hasher.verify(payload.password, user.hashed_password)
+        or not password_hasher.verify(
+            payload.password,
+            user.hashed_password,
+        )
         or not user.is_active
     ):
         raise HTTPException(
@@ -237,8 +401,54 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     )
 
 
-@app.get("/api/auth/me", response_model=UserResponse)
-def get_my_account(current_user: User = Depends(get_current_user)):
+@app.get(
+    "/api/auth/me",
+    response_model=UserResponse,
+)
+def get_my_account(
+    current_user: User = Depends(get_current_user),
+):
+    return current_user
+
+
+@app.patch(
+    "/api/auth/me",
+    response_model=UserResponse,
+)
+def update_my_account(
+    payload: ProfileUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Update the authenticated user's phone and/or delivery address.
+    Only fields included in the request are updated.
+    """
+    update_data = payload.model_dump(exclude_unset=True)
+
+    if not update_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No profile fields were provided.",
+        )
+
+    for field, value in update_data.items():
+        if isinstance(value, str):
+            value = value.strip()
+
+        setattr(current_user, field, value)
+
+    try:
+        db.commit()
+        db.refresh(current_user)
+
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to save your profile right now.",
+        )
+
     return current_user
 
 
@@ -277,12 +487,18 @@ products = [
 
 @app.get("/")
 def home():
-    return {"message": "Welcome to AVENQIO API!", "status": "running"}
+    return {
+        "message": "Welcome to AVENQIO API!",
+        "status": "running",
+    }
 
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "healthy", "project": "AVENQIO"}
+    return {
+        "status": "healthy",
+        "project": "AVENQIO",
+    }
 
 
 @app.get("/api/products")
@@ -296,4 +512,7 @@ def get_product(product_id: int):
         if product["id"] == product_id:
             return product
 
-    raise HTTPException(status_code=404, detail="Product not found")
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Product not found",
+    )
