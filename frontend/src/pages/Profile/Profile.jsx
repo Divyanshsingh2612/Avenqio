@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
@@ -39,6 +38,15 @@ function readSavedProfile() {
   }
 }
 
+function formatUserProfile(user = {}) {
+  return {
+    fullName: user.full_name || user.fullName || "",
+    email: user.email || "",
+    phone: user.phone || "",
+    address: user.address || "",
+  };
+}
+
 export default function Profile() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -61,23 +69,23 @@ export default function Profile() {
 
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(Boolean(token));
   const [loadError, setLoadError] = useState("");
+  const [saveError, setSaveError] = useState("");
 
   const [profile, setProfile] = useState(() => {
     const localProfile = readSavedProfile();
+    const userProfile = formatUserProfile(authUser);
 
     return {
       ...EMPTY_PROFILE,
       ...localProfile,
-      fullName:
-        authUser?.full_name || localProfile.fullName || "",
-      email:
-        authUser?.email || localProfile.email || "",
+      ...userProfile,
     };
   });
 
-  // Fetch the logged-in user's account details.
+  // Fetch the logged-in user's account details from the backend.
   useEffect(() => {
     if (!token) {
       setLoading(false);
@@ -97,14 +105,20 @@ export default function Profile() {
         if (cancelled) return;
 
         const user = response.data;
+        const userProfile = formatUserProfile(user);
 
         dispatch(updateUser(user));
 
         setProfile((previous) => ({
           ...previous,
-          fullName: user.full_name || "",
-          email: user.email || "",
+          ...userProfile,
         }));
+
+        // Keep a local copy as a convenience.
+        localStorage.setItem(
+          "avenqio-profile",
+          JSON.stringify(userProfile)
+        );
       } catch (error) {
         if (cancelled) return;
 
@@ -138,6 +152,7 @@ export default function Profile() {
     navigate("/login", { replace: true });
   };
 
+  // Update the form fields.
   const updateField = (event) => {
     const { name, value } = event.target;
 
@@ -147,42 +162,77 @@ export default function Profile() {
     }));
 
     setSaved(false);
+    setSaveError("");
   };
 
-  const saveProfile = (event) => {
+  // Save phone and address to the backend.
+  const saveProfile = async (event) => {
     event.preventDefault();
 
+    if (!token) {
+      setSaveError("Please log in to save your profile.");
+      return;
+    }
+
+    setSaving(true);
+    setSaved(false);
+    setSaveError("");
+
     try {
-      // Phone and address are currently saved locally.
+      const response = await api.patch("/api/auth/me", {
+        phone: profile.phone.trim(),
+        address: profile.address.trim(),
+      });
+
+      const updatedUser = response.data;
+      const updatedProfile = formatUserProfile(updatedUser);
+
+      // Update Redux with the latest backend user data.
+      dispatch(updateUser(updatedUser));
+
+      // Update the profile shown on the page.
+      setProfile((previous) => ({
+        ...previous,
+        ...updatedProfile,
+      }));
+
+      // Keep a local copy as a convenience.
       localStorage.setItem(
         "avenqio-profile",
-        JSON.stringify(profile)
+        JSON.stringify({
+          ...profile,
+          ...updatedProfile,
+        })
       );
 
       setEditing(false);
       setSaved(true);
-    } catch {
-      setSaved(false);
-      alert(
-        "Unable to save your profile. Please check browser storage."
+    } catch (error) {
+      console.error("Failed to save profile:", error);
+
+      setSaveError(
+        error.response?.data?.detail ||
+          "Unable to save your profile. Please try again."
       );
+    } finally {
+      setSaving(false);
     }
   };
 
+  // Discard unsaved changes and restore the saved data.
   const cancelEditing = () => {
     const localProfile = readSavedProfile();
+    const userProfile = formatUserProfile(authUser);
 
     setProfile({
       ...EMPTY_PROFILE,
       ...localProfile,
-      fullName:
-        authUser?.full_name || localProfile.fullName || "",
-      email:
-        authUser?.email || localProfile.email || "",
+      ...userProfile,
     });
 
     setEditing(false);
     setSaved(false);
+    setSaveError("");
   };
 
   const inputClass =
@@ -243,7 +293,7 @@ export default function Profile() {
           </p>
         </div>
 
-        {/* Error message */}
+        {/* Load error message */}
         {loadError && (
           <div
             role="alert"
@@ -299,6 +349,7 @@ export default function Profile() {
                 <FiPackage className="text-violet-500" />
                 My Orders
               </span>
+
               <FiArrowRight className="text-gray-400" />
             </Link>
 
@@ -346,6 +397,7 @@ export default function Profile() {
                   onClick={() => {
                     setEditing(true);
                     setSaved(false);
+                    setSaveError("");
                   }}
                   className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-700"
                 >
@@ -355,12 +407,23 @@ export default function Profile() {
               )}
             </div>
 
+            {/* Success message */}
             {saved && (
               <div
                 role="status"
                 className="mb-6 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-700 dark:border-green-500/20 dark:bg-green-500/10 dark:text-green-300"
               >
                 Profile saved successfully!
+              </div>
+            )}
+
+            {/* Save error message */}
+            {saveError && (
+              <div
+                role="alert"
+                className="mb-6 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300"
+              >
+                {saveError}
               </div>
             )}
 
@@ -417,20 +480,23 @@ export default function Profile() {
                 )}
               </div>
 
+              {/* Edit actions */}
               {editing && (
                 <div className="mt-8 flex flex-wrap gap-3">
                   <button
                     type="submit"
-                    className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-violet-700"
+                    disabled={saving}
+                    className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <FiSave />
-                    Save Changes
+                    {saving ? "Saving..." : "Save Changes"}
                   </button>
 
                   <button
                     type="button"
                     onClick={cancelEditing}
-                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-5 py-3 text-sm font-semibold transition hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"
+                    disabled={saving}
+                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-5 py-3 text-sm font-semibold transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:hover:bg-white/5"
                   >
                     <FiX />
                     Cancel
